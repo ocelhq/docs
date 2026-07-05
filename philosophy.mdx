@@ -1,0 +1,44 @@
+---
+title: "Philosophy"
+description: "The mental model behind Ocel"
+---
+
+Building on the cloud means writing code twice — once for your app, once for the infrastructure it runs on. Ocel collapses that into one: you call `postgres("main")` or `queue("emails")` in your code, and that's the whole provisioning step. 
+
+This design means you don't have to choose between great developer experience and owning your infrastructure the way most platforms ask you to.
+
+In development, you're instantly connected to real cloud resources — no Docker, no emulators, no waiting.
+
+When you deploy, that same code compiles to real infrastructure-as-code and lands in your own AWS or GCP account, so you're never locked into a black box you don't control.
+
+## The trade-off, stated plainly
+
+Abstractions aren't free — they trade control for speed. We'd rather name that trade than hide it.
+
+You give up direct control over how a resource gets provisioned: the specific module, the exact IAM shape, the mechanics.
+
+You keep full ownership of what gets built.
+
+Every resource is deployed into your own cloud account. Nothing runs in ours. If you stopped using Ocel tomorrow, the infrastructure — and the code describing it — is still yours to read, run, and change.
+
+## Why not just pick one
+
+Today, you have to choose.
+
+Want great developer experience?\
+→ Use Vercel, Railway, Render...
+
+But that means giving away control, which matters more the bigger you get.
+
+Want to own your infrastructure?\
+→ AWS/GCP/Azure with Terraform, Pulumi, SST...
+
+But that means giving up the developer experience — writing infrastructure by hand, in a fixed order, without real dev-mode tooling.
+
+Ocel doesn't ask you to pick a door.
+
+Terraform and Pulumi ask you to write infrastructure first, then wire your application to it by hand. SST pioneered narrowing that gap with resource linking, but application and infrastructure are still two artifacts, written in a fixed order.
+
+Ocel removes the ordering. There's no infrastructure to write before your application — it exists because your application asked for it.
+
+The same shift shows up in development. SST was the first real step past slow provisioning, but many resources still fall back to local containers, and some — buckets, for example — have no local option at all. Ocel's dev mode connects you to real cloud resources instantly, every time.

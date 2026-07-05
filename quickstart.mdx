@@ -1,0 +1,202 @@
+---
+title: "Quickstart"
+description: "Your first application with Ocel"
+---
+
+This guide will take you through how to develop and eventually deploy a Next.js app with Ocel.
+
+## Prerequisites
+
+Before you begin, you will need:
+
+- Node.js 22\+
+- An Ocel account. Sign up for free at [ocel.app](http://ocel.app)
+
+## Get started
+
+<Steps>
+  <Step title="Initialize the app">
+    ```shellscript
+    npx create-next-app@latest my-app
+    
+    cd my-app
+    
+    npm install ocel
+    ```
+  </Step>
+  <Step title="Login">
+    Link the CLI to your console account. You can sign-up on [ocel.app](http://ocel.app) 
+
+    ```bash
+    ocel login 
+    ```
+  </Step>
+  <Step title="Add a database">
+    Resources live in one place: the `ocel/` folder, exported as constants.
+
+    ```typescript ocel/db.ts
+    import { postgres } from "ocel/postgres"
+    
+    export const db = postgres("main")
+    ```
+
+    <Note>
+      The `ocel/` folder should exist in the root of your project
+    </Note>
+  </Step>
+  <Step title="Start dev mode">
+    ```shellscript
+    $ ocel dev -- next dev
+    
+    ✓ Linked to new project "my-app"
+    ✓ Resolved 1 resource: postgres("main")
+    ✓ Connected — ready in 0.4s
+    
+      ▲ Next.js 15.0.0
+      - Local:  http://localhost:3000
+    ```
+
+    First time running `ocel dev` in this directory — it just links itself to a new project. Nothing to configure beforehand.
+  </Step>
+</Steps>
+
+### Bring your own ORM
+
+`postgres("main")` returns a standard connection — hand it to Drizzle, Prisma, or query it directly.
+
+<CodeGroup>
+
+```typescript ocel/db.ts
+import { postgres } from "ocel/postgres"
+import * as schema from "./db/schema.ts"
+// Make sure to install the 'pg' package 
+import { drizzle } from 'drizzle-orm/node-postgres'
+ 
+export const pg = postgres("main")
+export const db = drizzle(pg.connectionString)
+```
+
+```typescript db/schema.ts
+import { integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+
+export const photos = pgTable('photos', {
+  id: integer(),
+  key: text(),
+  created_at: timestamp().defaultNow().notNull(),
+})
+```
+
+</CodeGroup>
+
+Ocel provisions the database. It doesn't decide how you query it.
+
+### Add file storage
+
+```typescript ocel/storage.ts
+import { bucket, uploader } from "ocel/blob"
+import { db } from "./db"
+import { photos } from "../db/schema"
+ 
+export const photoBucket = bucket("photos", {
+  uploaders: {
+    photo: uploader(
+      {
+        middleware: async () => {
+          // TODO: check auth
+        },
+      },
+      {
+        accept: ["image/*"],
+        path: { prefix: "photos/", randomSuffix: true },
+        onUploadComplete: async ({ key }) => {
+          await db.insert(photos).values({ key })
+      },
+    ),
+  },
+})
+```
+
+Add the route handler for uploads
+
+```typescript app/api/upload/route.ts
+import { photoBucket } from "@/ocel/storage"
+import { createRouteHandler } from "ocel/blob/next";
+
+export const { GET, POST } = createRouteHandler(photoBucket)
+```
+
+### Upload from the client
+
+```tsx app/upload-button.tsx
+"use client"
+ 
+import { createUploadClient } from "ocel/blob/client"
+import type { photoBucket } from "@/ocel/storage"
+//  ^^ IMPORTING TYPE ONLY!
+ 
+const client = createUploadClient<typeof photoBucket>({ url: "/api/upload" })
+ 
+export function UploadButton() {
+  return (
+    <input
+      type="file"
+      accept="image/*"
+      onChange={async (e) => {
+        const files = Array.from(e.target.files ?? [])
+ 
+        // use the uploader - type safe!
+        await client.upload("photo", { files })
+      }}
+    />
+  )
+}
+```
+
+The file goes straight from the browser to real storage. By the time the request resolves, the database already has the row.
+
+### Secrets, without the .env file
+
+Need an API key or other credential? Define it once, for an environment, in the Ocel console — it shows up in your code as a typed `process.env.STRIPE_KEY`, auto-completed by your editor. No `.env` file, no copying values between teammates. Change it in the console and it's live in your running dev session immediately.
+
+## Deploy
+
+Dev mode ran your resources in Ocel's managed dev cloud. Production runs in yours.
+
+First, bootstrap your AWS account — a one-time step per account, not per project, that sets up the shared infrastructure Ocel needs to deploy into it.
+
+```bash
+$ ocel bootstrap --production
+ 
+? Connect an AWS account to deploy to  [Enter to open browser]
+ 
+✓ Bootstrapped shared infrastructure in your AWS account
+```
+
+This is the only time you'll deal with cloud credentials directly.
+
+Then deploy:
+
+```bash
+$ ocel deploy
+ 
+✓ Compiled 2 resources to Pulumi
+✓ Provisioned Postgres (RDS)
+✓ Provisioned storage bucket (S3)
+✓ Deployed application
+ 
+🔗 https://my-app-3f8a.ocel.app
+```
+
+That's a real app, on real infrastructure, in your own AWS account — live at a real URL.
+
+## What's next
+
+Every resource here carries its own trigger — a schedule for `cron`, an event for `workflow`, an upload for `bucket`. HTTP stays whatever framework you're already using.
+
+- **Workflows** — durable, retryable background jobs. Coming soon.
+- **Cron** — scheduled functions, defined the same way as everything else. Coming soon.
+- **Key-value** — a fast cache, same pattern as `postgres()` and `bucket()`. Coming soon.
+
+<Card title="See how dev mode works" href="/dev-mode">
+  Real cloud resources, connected instantly — here's the mechanism.
+</Card>

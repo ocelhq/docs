@@ -1,0 +1,51 @@
+---
+title: "Introduction"
+description: "What is Ocel ?"
+---
+
+Ocel is an SDK that turns cloud infrastructure into function calls.
+
+```ts app/api/users/route.ts
+import { postgres } from "ocel/postgres"
+
+const db = postgres("main")
+
+export async function GET() {
+  const users = await db.query("select * from users")
+  return Response.json(users)
+}
+```
+
+That's a real Postgres database. Not a mock, not a local container — a live instance, connected the moment your app starts.
+
+```bash
+$ ocel dev -- next dev
+
+✓ Resolved 1 resource: postgres("main")
+✓ Connected — ready in 0.4s
+
+  ▲ Next.js 15.0.0
+  - Local:  http://localhost:3000
+```
+
+No Docker Compose file. No `.env` full of connection strings copied from a teammate. No emulator that behaves almost, but not quite, like the real thing. You call `postgres("main")`, and Ocel hands you a real database — spun up instantly in Ocel's managed dev cloud and connected before your dev server finishes booting. 
+
+## Application-defined infrastructure
+
+```ts
+const db     = postgres("main")
+const files  = bucket("uploads")
+const emails = queue("notifications")
+```
+
+There's no infrastructure layer to design separately from your app, and no YAML describing what's allowed to talk to what. The infrastructure exists because your code asked for it — nothing more, nothing less.
+
+## From your laptop to production
+
+In development, `ocel dev` connects you to real infrastructure instantly, so you're never waiting on provisioning to start building.
+
+When you deploy, that same code compiles to Pulumi and ships into _your_ cloud account — real infrastructure you own, not a black box you rent access to.
+
+Same code, same model, both ends. That's the whole point: you don't trade one for the other.
+
+ \<Card title="Try it yourself" icon="rocket" href="/quickstart"\> Go from zero to a running app with a live database in under two minutes. \</Card\>

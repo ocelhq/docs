@@ -1,3 +1,146 @@
 ---
-title: "Storage"
+title: "File Storage"
+description: "Uploads that go straight from the browser to your bucket"
 ---
+
+Uploading a file normally means writing the same thing three times: a presigned-URL endpoint on the server, a fetch call on the client, and the validation logic that has to agree between them. `bucket()` and `uploader()` collapse those into one definition — the server route and the client's types both come from it.
+
+## Define a bucket
+
+A bucket holds one or more uploaders. Each uploader is a named upload target with its own auth check, validation, and completion hook.
+
+<CodeGroup>
+
+```typescript ocel/storage.ts
+import { bucket } from "ocel/blob"
+import { uploader } from "ocel/blob/next"
+import { getUserId } from "./auth"
+import { db } from "./db"
+import { photos } from "./db/schema"
+
+const avatar = uploader(
+  {
+    middleware: async ({ req }) => {
+      const userId = await getUserId(req)
+      if (!userId) throw new Error("Unauthorized")
+      return { userId }
+    },
+  },
+  {
+    accept: ["image/*"],
+    path: { prefix: "avatars/", randomSuffix: true },
+    limits: { maxFileSize: "1MB" },
+    onUploadComplete: async ({ metadata, file }) => {
+      await db.insert(photos).values({ key: file.path, userId: metadata.userId })
+    },
+  },
+)
+
+export const storageBucket = bucket("storage", {
+  uploaders: { avatar },
+})
+```
+
+```typescript ocel/db/schema.ts
+import { integer, pgTable, text } from "drizzle-orm/pg-core"
+
+export const photos = pgTable("photos", {
+  id: integer(),
+  key: text(),
+  userId: text(),
+})
+```
+
+</CodeGroup>
+
+`middleware` runs before a file is accepted — reject the request there, or return metadata that flows through to `onUploadComplete`. Anything else about the upload (limits, storage path, MIME types) lives in the second argument.
+
+<Note>
+  `uploader` is imported from an adapter path (`ocel/blob/next`, `ocel/blob/hono`, ...), not from `ocel/blob` directly, so its `req` argument is typed for that framework. `bucket` itself stays adapter-agnostic — but every uploader inside one bucket must come from the same adapter.
+</Note>
+
+### Multiple files per upload
+
+`limits` also controls how many files a single upload call can contain — useful for anything that isn't a one-file avatar:
+
+```typescript ocel/storage.ts
+const gallery = uploader(
+  {
+    middleware: async ({ req }) => ({ userId: await getUserId(req) }),
+  },
+  {
+    accept: ["image/*"],
+    path: { prefix: "gallery/", randomSuffix: true },
+    limits: { maxFileSize: "5MB", maxFileCount: 10, minFileCount: 1 },
+    onUploadComplete: async ({ metadata, file }) => {
+      await db.insert(photos).values({ key: file.path, userId: metadata.userId })
+    },
+  },
+)
+
+export const storageBucket = bucket("storage", {
+  uploaders: { avatar, gallery },
+})
+```
+
+## Add the route handler
+
+The handler is imported from the same adapter as `uploader`:
+
+<CodeGroup>
+
+```typescript app/api/upload/route.ts
+import { storageBucket } from "@/ocel/storage"
+import { createRouteHandler } from "ocel/blob/next"
+
+export const { GET, POST } = createRouteHandler(storageBucket)
+```
+
+```typescript Hono
+import { Hono } from "hono"
+import { storageBucket } from "./storage"
+import { createRouteHandler } from "ocel/blob/hono"
+
+export const app = new Hono()
+
+app.post("/upload", createRouteHandler(storageBucket))
+```
+
+</CodeGroup>
+
+The Hono version above assumes `storageBucket` was built with uploaders from `ocel/blob/hono`, not `ocel/blob/next` — a bucket is locked to whichever adapter created its uploaders.
+
+## Upload from the client
+
+```tsx app/upload-button.tsx
+"use client"
+
+import { createUploadClient } from "ocel/blob/client"
+import type { storageBucket } from "@/ocel/storage"
+//   ^^ IMPORTING TYPE ONLY — this keeps server code out of the client bundle
+
+const client = createUploadClient<typeof storageBucket>({ url: "/api/upload" })
+
+export function AvatarUploadButton() {
+  return (
+    <input
+      type="file"
+      accept="image/*"
+      onChange={async (e) => {
+        const files = Array.from(e.target.files ?? [])
+
+        // "avatar" is checked against storageBucket's uploaders — typos are a type error
+        await client.upload("avatar", { files })
+      }}
+    />
+  )
+}
+```
+
+The file goes straight from the browser to storage. By the time the request resolves, `onUploadComplete` has already run and the database row exists.
+
+Ocel owns the contract between the route handler and the client — you get type safety across that boundary for free, but you're not hand-rolling (or swapping out) the presign exchange yourself.
+
+<Card title="Full type and argument reference" href="/sdk/blob" icon="code">
+  Every field on `uploader`'s two arguments, plus `bucket`, `createRouteHandler`, and `createUploadClient`.
+</Card>

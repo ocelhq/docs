@@ -93,26 +93,31 @@ Ocel provisions the database. It doesn't decide how you query it.
 ### Add file storage
 
 ```typescript ocel/storage.ts
-import { bucket, uploader } from "ocel/blob"
+import { bucket } from "ocel/blob"
+import { uploader } from "ocel/blob/next"
+import { getUserId } from "./auth"
 import { db } from "./db"
 import { photos } from "../db/schema"
- 
-export const photoBucket = bucket("photos", {
-  uploaders: {
-    photo: uploader(
-      {
-        middleware: async () => {
-          // TODO: check auth
-        },
-      },
-      {
-        accept: ["image/*"],
-        path: { prefix: "photos/", randomSuffix: true },
-        onUploadComplete: async ({ key }) => {
-          await db.insert(photos).values({ key })
-      },
-    ),
+
+const photo = uploader(
+  {
+    middleware: async ({ req }) => {
+      const userId = await getUserId(req)
+      if (!userId) throw new Error("Unauthorized")
+      return { userId }
+    },
   },
+  {
+    accept: ["image/*"],
+    path: { prefix: "photos/", randomSuffix: true },
+    onUploadComplete: async ({ metadata, file }) => {
+      await db.insert(photos).values({ key: file.path, userId: metadata.userId })
+    },
+  },
+)
+
+export const photoBucket = bucket("photos", {
+  uploaders: { photo },
 })
 ```
 

@@ -1,0 +1,154 @@
+---
+title: "ocel/blob"
+description: "Full type and argument reference for buckets, uploaders, and route handlers"
+---
+
+For usage and examples, see [File Storage](/storage). This page documents every argument and type in the `ocel/blob` package.
+
+## `bucket()`
+
+Imported from `ocel/blob`.
+
+```typescript
+function bucket<TUploaders extends Record<string, Uploader>>(
+  name: string,
+  config: { uploaders: TUploaders },
+): Bucket<TUploaders>
+```
+
+<ParamField path="name" type="string" required>
+  Unique identifier for the bucket resource.
+</ParamField>
+
+<ParamField path="config.uploaders" type="Record<string, Uploader>" required>
+  A map of uploader name to `uploader()` instance. Clients reference uploaders by these keys, and the keys are type-checked against `createUploadClient`'s `.upload()` calls.
+</ParamField>
+
+<Warning>
+  Every uploader in `config.uploaders` must come from the same adapter import (all `ocel/blob/next`, or all `ocel/blob/hono`, etc.). Mixing adapters within one bucket is a type error.
+</Warning>
+
+## `uploader()`
+
+Imported from an adapter path — `ocel/blob/next`, `ocel/blob/hono`, and so on. Only the `req` type inside `middleware` changes between adapters; the rest of the signature is identical.
+
+```typescript
+function uploader<TInput extends ZodType = never, TMeta = never, TReturn = unknown>(
+  auth: UploaderAuthConfig<TInput, TMeta>,
+  options: UploaderOptions<TMeta, TReturn>,
+): Uploader<TInput, TMeta, TReturn>
+```
+
+### `UploaderAuthConfig<TInput, TMeta>`
+
+The first argument — authentication and input parsing, run once per upload request before any file is accepted.
+
+<ParamField path="middleware" type="(opts) => TMeta | Promise<TMeta>" required>
+  Runs before any file is accepted. Throw to reject the request. The return value becomes `TMeta`, threaded through to `onUploadComplete` and `onUploadError`.
+
+  <Expandable title="opts">
+    <ResponseField name="files" type="PresignUploadBody[&quot;files&quot;]">
+      Metadata for each file requesting an upload URL — name, size, declared type. Not file contents.
+    </ResponseField>
+    <ResponseField name="input" type="z.infer<TInput>">
+      Parsed, validated input. Only present in `opts` if `input` (below) is set.
+    </ResponseField>
+    <ResponseField name="req" type="adapter-specific">
+      The incoming request, typed for whichever adapter `uploader` was imported from (e.g. `Request` for `ocel/blob/next` and `ocel/blob/hono`).
+    </ResponseField>
+  </Expandable>
+</ParamField>
+
+<ParamField path="input" type="ZodType">
+  Optional Zod schema for extra data sent alongside the files. When set, `createUploadClient`'s `.upload()` requires a matching `input` object, and `middleware`'s `opts.input` is parsed and typed.
+</ParamField>
+
+### `UploaderOptions<TMeta, TReturn>`
+
+The second argument — everything about how files are accepted, stored, and finalized.
+
+<ParamField path="path" type="{ prefix?: string; randomSuffix?: boolean }">
+  Where uploaded files are stored within the bucket.
+</ParamField>
+
+<ParamField path="accept" type="string[]">
+  Allowed MIME types, e.g. `["image/*"]`. Rejected before `middleware` runs.
+</ParamField>
+
+<ParamField path="limits" type="object">
+  <Expandable title="limits">
+    <ResponseField name="maxFileSize" type="FileSize | (ctx: { metadata?: TMeta }) => FileSize">
+      Per-file size cap, e.g. `"5MB"`.
+    </ResponseField>
+    <ResponseField name="maxFileCount" type="number | (ctx: { metadata?: TMeta }) => number">
+      Maximum files allowed in a single upload call.
+    </ResponseField>
+    <ResponseField name="minFileCount" type="number | (ctx: { metadata?: TMeta }) => number">
+      Minimum files required in a single upload call.
+    </ResponseField>
+  </Expandable>
+</ParamField>
+
+<ParamField path="contentDisposition" type="&quot;inline&quot; | &quot;attachment&quot;">
+  `inline` renders the file in-browser when visited directly; `attachment` forces a download.
+</ParamField>
+
+<ParamField path="onUploadComplete" type="(args) => TReturn | Promise<TReturn>">
+  Runs once a file has finished uploading to storage.
+
+  <Expandable title="args">
+    <ResponseField name="metadata" type="TMeta">
+      The value `middleware` returned for this request.
+    </ResponseField>
+    <ResponseField name="file" type="{ path: string; contentDisposition: string; contentType: string }">
+      The stored file's location and resolved metadata.
+    </ResponseField>
+  </Expandable>
+</ParamField>
+
+<ParamField path="onUploadError" type="(args: { error: UploadError }) => void | Promise<void>">
+  Runs if a file fails to upload after `middleware` already approved the request.
+</ParamField>
+
+## `createRouteHandler()`
+
+Imported from the same adapter as `uploader`. Shape of the return value depends on the adapter.
+
+<CodeGroup>
+
+```typescript ocel/blob/next
+function createRouteHandler(bucket: Bucket): {
+  GET: RouteHandler
+  POST: RouteHandler
+}
+```
+
+```typescript ocel/blob/hono
+function createRouteHandler(bucket: Bucket): Handler
+```
+
+</CodeGroup>
+
+<ParamField path="bucket" type="Bucket" required>
+  A bucket whose uploaders were all created with this same adapter.
+</ParamField>
+
+## `createUploadClient()`
+
+Imported from `ocel/blob/client`. Framework-agnostic — same import regardless of which server adapter you used.
+
+```typescript
+function createUploadClient<TBucket extends Bucket>(
+  config: { url: string },
+): UploadClient<TBucket>
+```
+
+<ParamField path="config.url" type="string" required>
+  Path to the route created by `createRouteHandler`.
+</ParamField>
+
+The returned client exposes `upload(name, { files, input? })`, where `name` is checked against `TBucket`'s uploader keys and `input` is required or omitted based on that uploader's `input` schema.
+
+<Warning>
+  Always import the bucket's type with `import type`, never a value import, in client components. `TBucket` is used purely for inference — a value import would pull server code (and whatever it touches, like `db`) into the client bundle.
+</Warning>

@@ -42,7 +42,7 @@
         ]
       },
       {
-        "group": "Building",
+        "group": "Resources",
         "pages": [
           "database",
           "storage",
@@ -76,9 +76,15 @@
         "group": "Reference",
         "pages": [
           "cli",
-          "sdk",
           "config",
-          "console"
+          "console",
+          {
+            "group": "SDK",
+            "root": "sdk",
+            "pages": [
+              "sdk/blob"
+            ]
+          }
         ]
       }
     ]

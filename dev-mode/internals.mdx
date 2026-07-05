@@ -1,0 +1,30 @@
+---
+title: "Dev Mode Internals"
+description: "The protocol underneath `ocel dev` — for the curious, not required reading"
+---
+
+Everything on this page happens automatically. You don't need it to use `ocel dev` — it's here for when you want to know exactly what's happening, or you're debugging something that looks like a protocol issue.
+
+## The local gRPC server
+
+The leader process starts a local gRPC server on startup. Every SDK function (`postgres()`, `bucket()`, ...) is a gRPC client against that server — calling `postgres("main")` doesn't open a Postgres connection directly, it asks the local `ocel dev` server to resolve one.
+
+## The manifest
+
+As discovery imports files under `discovery.paths`, each SDK call registers itself with the leader. The leader accumulates these into a manifest: resource name, resource type, and whatever config was passed (e.g. `{ version: "17" }` for `postgres()`). The manifest is what gets sent to Ocel's cloud to authenticate and assign — nothing is assigned until discovery finishes importing every matched file.
+
+## Assign, not provision
+
+Ocel's cloud keeps a warm pool of already-running instances per resource type. Assignment is a pool checkout keyed by `(projectId, resource name, developer identity)`: an existing instance for that key is returned if one exists, otherwise a fresh one is checked out of the pool and becomes sticky for that key going forward. The same key always resolves to the same instance.
+
+## Leader election
+
+The first `ocel dev` for a given `projectId` creates a lockfile — keyed by `projectId`, held in a per-user temp directory — containing the address of its local gRPC server. Every subsequent `ocel dev` for that same `projectId` finds the lockfile, connects to the address inside it, and becomes a follower. A follower never talks to Ocel's cloud directly, and it skips discovery entirely, since the leader already has (or will have) the full manifest.
+
+<Note>
+  If the leader exits cleanly it removes its lockfile; on a crash, the lockfile can go stale. Followers don't re-elect or promote themselves — restart the leader to recover.
+</Note>
+
+## Watching for new resources
+
+The leader keeps `discovery.paths` under a file watcher for the life of the process. A change that adds a new resource call triggers a re-scan of the changed file, an incremental update to the manifest, and a fresh assign call for just the new resource. Any follower whose environment needs that new variable is restarted automatically so its process picks it up.

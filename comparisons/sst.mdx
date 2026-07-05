@@ -1,0 +1,22 @@
+---
+title: "SST"
+description: "Where Ocel and SST make different trade-offs"
+---
+
+SST was the first real step past slow, manual provisioning for application infrastructure. Ocel starts from the same problem and lands in a different place on a few specific points.
+
+## No required multiplexer
+
+SST ships its own dev multiplexer and expects your workflow to run through it. `ocel dev` is a wrapper around whatever command you already run — `ocel dev -- next dev` — so it composes with `turbo`, `nx`, or anything else already orchestrating your processes, instead of replacing it. Run `ocel dev` in more than one app at once and they coordinate automatically through a [leader/follower model](/dev-mode#monorepos); nothing about that requires a specific task runner.
+
+## No fixed ordering between app and infra
+
+SST pioneered resource linking — narrowing the gap between your application and the infrastructure it uses — but infrastructure and application are still two artifacts, written in a fixed order: infra first, app wired to it second. Ocel removes the ordering entirely. There's no infrastructure file to write before your application; the infrastructure exists because your application asked for it, in the same file, at the same time.
+
+## Real resources, not local containers
+
+Many of SST's dev-mode resources still fall back to local containers, and some — object storage, for example — have no local option at all. `ocel dev` connects every resource to a real, already-running cloud instance, every time, regardless of resource type. See [Dev Mode](/dev-mode) for how that stays instant.
+
+<Info>
+  More comparisons coming as we track them.
+</Info>

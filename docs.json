@@ -45,7 +45,13 @@
         "group": "Concepts",
         "pages": [
           "resources",
-          "discovery",
+          {
+            "group": "Dev Mode",
+            "root": "dev-mode",
+            "pages": [
+              "dev-mode/internals"
+            ]
+          },
           "providers"
         ]
       },
@@ -64,6 +70,12 @@
           "running-locally",
           "environments",
           "debugging"
+        ]
+      },
+      {
+        "group": "Comparisons",
+        "pages": [
+          "comparisons/sst"
         ]
       },
       {

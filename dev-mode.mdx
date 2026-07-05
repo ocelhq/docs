@@ -1,0 +1,71 @@
+---
+title: "Dev Mode"
+description: "How `ocel dev` connects you to real cloud resources instantly"
+---
+
+```bash
+ocel dev -- next dev
+```
+
+Wrap any dev command with `ocel dev` and every resource declared in your code — `postgres()`, `bucket()`, whatever you've called — connects to a real, running instance before your app finishes booting. No Docker, no emulators, no waiting.
+
+## What happens when you run it
+
+1. **Discovery.** `ocel dev` imports the files in your `ocel/` folder. Running `postgres("main")` is what registers the resource — the import itself is discovery.
+2. **Auth.** Not logged in? `ocel dev` opens a browser to the login page and waits for you to finish.
+3. **Assign.** Each resource connects to a real, running instance — instantly. Restart `ocel dev` later and you're back on the same one, same data.
+4. **Start.** Your app starts with that connection info already in its environment.
+
+## Setup
+
+Run `ocel init` once per project. It writes a `projectId` to `ocel.config.ts` — that's all `ocel dev` needs.
+
+```ts ocel.config.ts
+import { defineConfig } from "ocel";
+
+export default defineConfig({
+  projectId: "my-project-id",
+});
+```
+
+## Monorepos
+
+Run `ocel dev` in more than one app at a time — under `turbo`, `nx`, or by hand — and it just works. The first one becomes the **leader** and owns discovery, auth, and assignment for the whole project; every other one becomes a **follower** and asks the leader for what it needs instead of repeating the work. Ocel doesn't ship a multiplexer or ask you to run your processes through one.
+
+If your resources live in more than one `ocel/` folder — one per package, say — point discovery at all of them from the root config:
+
+```ts ocel.config.ts
+export default defineConfig({
+  projectId: "my-project-id",
+  discovery: {
+    paths: ["ocel", "packages/*/ocel"],
+  },
+});
+```
+
+There's one `ocel.config.ts` per monorepo, at the root — not one per app. Running `ocel dev` from a nested app finds it by walking up the directory tree, the same way `tsconfig.json` resolution works.
+
+<Note>
+  If the leader exits, restart it — followers don't auto-promote.
+</Note>
+
+`ocel dev` watches your resource files. Add a new one and the leader assigns it, restarting any follower that needs it.
+
+<Card title="Dev mode internals" href="/dev-mode/internals" icon="gears">
+  The gRPC protocol, manifest format, and leader/follower coordination underneath this page.
+</Card>
+
+## Trade-offs
+
+- You need a network connection — there's no offline mode.
+- Your dev data lives in Ocel's cloud, not your laptop.
+- Dev resources are isolated per developer. Two people on the same project each get their own instance, not a shared one.
+
+<CardGroup cols={2}>
+  <Card title="Philosophy" href="/philosophy" icon="compass">
+    Why Ocel connects to real infrastructure instead of emulating it.
+  </Card>
+  <Card title="Comparisons" href="/comparisons/sst" icon="scale-balanced">
+    How this differs from tools like SST.
+  </Card>
+</CardGroup>

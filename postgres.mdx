@@ -1,0 +1,65 @@
+---
+title: "Postgres"
+description: "A real Postgres instance, provisioned by calling a function"
+---
+
+Provisioning a database normally means capacity planning, subnet groups, and IAM — infrastructure decisions made before you've written a single query. `postgres()` collapses that into one call: a live Postgres instance, connected before your dev server finishes booting.
+
+## Define a database
+
+```typescript ocel/db.ts
+import { postgres } from "ocel/postgres"
+
+export const pg = postgres("main")
+
+export async function getUsers() {
+  const result = await pg.query("SELECT * FROM users")
+  return result
+}
+```
+
+`pg` is a real (extended) [`node-postgres`](https://node-postgres.com) `Pool` — `pg.query()` works exactly as it would against any Postgres instance, and the object itself is compatible with anything that accepts a `Pool`.
+
+<Warning>
+  The name (`"main"`) is a stable identifier, not a label — it's how Ocel tracks this database across dev and every deploy. Renaming it destroys the old database and provisions a new one.
+</Warning>
+
+## Connect your ORM
+
+Because `pg` is a real `Pool`, it drops straight into Drizzle's `node-postgres` adapter:
+
+<CodeGroup>
+
+```typescript ocel/db.ts
+import { postgres } from "ocel/postgres"
+import { drizzle } from "drizzle-orm/node-postgres"
+
+export const pg = postgres("main")
+export const db = drizzle(pg)
+```
+
+```typescript ocel/db/schema.ts
+import { integer, pgTable, text, timestamp } from "drizzle-orm/pg-core"
+
+export const users = pgTable("users", {
+  id: integer(),
+  email: text(),
+  createdAt: timestamp().defaultNow().notNull(),
+})
+```
+
+</CodeGroup>
+
+Tools that want a raw string instead of a `Pool` — Prisma's `DATABASE_URL`, a migration CLI — can read `pg.connectionString`, or the equivalent environment variable Ocel populates automatically. Ocel provisions the database; it doesn't decide how you query it.
+
+## Migrations
+
+`postgres()` has no opinion on schema migrations. Point your ORM's own tooling (Drizzle Kit, Prisma Migrate) at the same connection and run it the way you always would.
+
+## Scope
+
+Today, `postgres()` provisions Amazon RDS on deploy — GCP's Cloud SQL isn't wired up yet. Changing `version` on a database that already has data performs an in-place upgrade, the same as RDS itself.
+
+<Card title="Full type and argument reference" href="/sdk/postgres" icon="code">
+  Every field on `postgres()`, plus the shape of the object it returns.
+</Card>

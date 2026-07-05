@@ -1,0 +1,36 @@
+---
+title: "ocel/postgres"
+description: "Full type and argument reference for the postgres resource"
+---
+
+For usage and examples, see [Databases](/database). This page documents every argument and type in the `ocel/postgres` package.
+
+## `postgres()`
+
+Imported from `ocel/postgres`.
+
+```typescript
+function postgres(name: string, config?: { version?: string }): Pool & { connectionString: string }
+```
+
+<ParamField path="name" type="string" required>
+  Stable identifier for the database resource, tracked across dev and every deploy. Changing it destroys the existing database and provisions a new one under the new name.
+</ParamField>
+
+<ParamField path="config.version" type="string">
+  Postgres major version, e.g. `"17"`. Defaults to the latest supported version. Changing this on a database that already has data performs an in-place upgrade rather than a recreate.
+</ParamField>
+
+<Warning>
+  `name` is a destroy-and-recreate key, not a display label. There's no in-place rename.
+</Warning>
+
+### Return value
+
+The returned object extends [`node-postgres`](https://node-postgres.com)'s `Pool` — every method on `Pool` (`query`, `connect`, `end`, ...) works as documented there. It also exposes:
+
+<ResponseField name="connectionString" type="string">
+  The raw connection string, for tools that expect one instead of a `Pool` instance (e.g. Prisma's `DATABASE_URL`, a migration CLI). Ocel also populates this as an environment variable automatically.
+</ResponseField>
+
+Because the return value is a real `Pool`, it can be passed directly to any ORM adapter that accepts one — for example `drizzle-orm/node-postgres`'s `drizzle(pool)`.

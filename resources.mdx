@@ -1,3 +1,45 @@
 ---
 title: "Resources"
+description: "The unit Ocel provisions from — a function call in your code"
 ---
+
+A resource is any piece of infrastructure declared by calling a function in application code — `postgres("main")`, `bucket("uploads")`, `queue("emails")`. There's no separate infrastructure file to keep in sync: the call itself is the provisioning step, in dev and on deploy alike.
+
+## The identifier
+
+Every resource function takes a name as its first argument — `postgres("main")`, `bucket("uploads")`. That name is a stable identifier, not a display label, and it's **globally unique across your entire app**, not just within one resource type. `postgres("main")` and `bucket("main")` can't coexist; pick a different name for one of them.
+
+<Warning>
+  Renaming a resource destroys the old one and provisions a new one under the new name — for every resource type, not just databases. A bucket rename loses its files the same way a database rename loses its rows.
+</Warning>
+
+## Where resources live
+
+By default, Ocel expects resources as exported constants inside an `ocel/` folder at your project root — that's what `ocel dev` scans on startup to resolve what to connect. In a monorepo, or any layout where that default doesn't fit, you point Ocel elsewhere via `ocel.config.ts`.
+
+<Card title="Config reference" href="/config" icon="gear">
+  Override where Ocel looks for resources, among other project-level settings.
+</Card>
+
+## From code to cloud
+
+In dev, `ocel dev` connects each resource to a real, live instance in Ocel's managed dev cloud — instantly, no local emulation. On deploy, the same declarations compile to infrastructure-as-code and provision into your own AWS or GCP account.
+
+<Card title="Discovery" href="/discovery" icon="magnifying-glass">
+  How `ocel dev` finds and resolves resources at startup.
+</Card>
+
+<Card title="Providers" href="/providers" icon="cloud">
+  How a resource maps to a specific cloud and account on deploy.
+</Card>
+
+## Available resources
+
+<CardGroup cols={2}>
+  <Card title="Databases" href="/database" icon="database">
+    `postgres()` — a real Postgres instance, connected instantly in dev and provisioned as RDS on deploy.
+  </Card>
+  <Card title="File Storage" href="/storage" icon="folder">
+    `bucket()` — typed upload endpoints backed by real object storage, from browser to bucket.
+  </Card>
+</CardGroup>
